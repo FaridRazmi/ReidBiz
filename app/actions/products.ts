@@ -5,24 +5,36 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 
-async function requireUser() {
-  const user = await getSessionUser();
-  if (!user) redirect("/dashboard");
-  return user;
-}
-
 function revalidateApp() {
   revalidatePath("/dashboard");
   revalidatePath("/products");
   revalidatePath("/sales/history");
   revalidatePath("/rentals");
+  revalidatePath("/reports/monthly");
+}
+
+function parseMoney(formData: FormData, key: string): number {
+  const raw = String(formData.get(key) ?? "").trim();
+  if (!raw) return 0;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0) return 0;
+  return Math.round(value * 100) / 100;
 }
 
 function parsePrice(formData: FormData, key: string): number | null {
   const raw = String(formData.get(key) ?? "").trim();
   if (!raw) return null;
   const value = Number(raw);
-  return Number.isFinite(value) ? value : null;
+  if (!Number.isFinite(value) || value < 0) return null;
+  return Math.round(value * 100) / 100;
+}
+
+function parseQuantity(formData: FormData, key: string): number {
+  const raw = String(formData.get(key) ?? "").trim();
+  if (!raw) return 0;
+  const value = Math.trunc(Number(raw));
+  if (!Number.isFinite(value) || value < 0) return 0;
+  return value;
 }
 
 function parseExpiry(formData: FormData): Date | null {
@@ -44,20 +56,25 @@ function rentalFields(formData: FormData) {
   };
 }
 
-export async function createProduct(formData: FormData) {
-  const user = await requireUser();
+function productFields(formData: FormData) {
+  return {
+    name: String(formData.get("name") ?? "").trim(),
+    quantity: parseQuantity(formData, "quantity"),
+    buyingPrice: parseMoney(formData, "buying_price"),
+    sellingPrice: parseMoney(formData, "selling_price"),
+    ...rentalFields(formData),
+  };
+}
 
-  const name = String(formData.get("name") ?? "").trim();
-  if (!name) return;
+export async function createProduct(formData: FormData) {
+  const user = await getSessionUser();
+  const fields = productFields(formData);
+  if (!fields.name) redirect("/products/new?error=name");
 
   await prisma.product.create({
     data: {
       userId: user.id,
-      name,
-      quantity: Number(formData.get("quantity") ?? 0) || 0,
-      buyingPrice: Number(formData.get("buying_price") ?? 0) || 0,
-      sellingPrice: Number(formData.get("selling_price") ?? 0) || 0,
-      ...rentalFields(formData),
+      ...fields,
     },
   });
 
@@ -66,24 +83,19 @@ export async function createProduct(formData: FormData) {
 }
 
 export async function updateProduct(formData: FormData) {
-  const user = await requireUser();
+  const user = await getSessionUser();
 
   const id = Number(formData.get("id"));
-  const name = String(formData.get("name") ?? "").trim();
-  if (!id || !name) return;
+  const fields = productFields(formData);
+  if (!id) redirect("/products");
+  if (!fields.name) redirect(`/products/${id}/edit?error=name`);
 
   const product = await prisma.product.findFirst({ where: { id, userId: user.id } });
   if (!product) redirect("/products");
 
   await prisma.product.update({
     where: { id },
-    data: {
-      name,
-      quantity: Number(formData.get("quantity") ?? 0) || 0,
-      buyingPrice: Number(formData.get("buying_price") ?? 0) || 0,
-      sellingPrice: Number(formData.get("selling_price") ?? 0) || 0,
-      ...rentalFields(formData),
-    },
+    data: fields,
   });
 
   revalidateApp();
@@ -91,18 +103,21 @@ export async function updateProduct(formData: FormData) {
 }
 
 export async function deleteProduct(formData: FormData) {
-  const user = await requireUser();
+  const user = await getSessionUser();
 
   const id = Number(formData.get("id"));
   if (!id) return;
 
   const product = await prisma.product.findFirst({ where: { id, userId: user.id } });
-  if (!product) redirect("/products");
+  if (!product) redirect("/products?error=missing");
 
-  const customerRecords = await prisma.sale.count({ where: { productId: id } });
-  const rentalRecords = await prisma.rental.count({ where: { productId: id } });
-  if (customerRecords > 0 || rentalRecords > 0) {
-    redirect("/products");
+  const [saleRecords, rentalRecords] = await Promise.all([
+    prisma.sale.count({ where: { productId: id } }),
+    prisma.rental.count({ where: { productId: id } }),
+  ]);
+
+  if (saleRecords > 0 || rentalRecords > 0) {
+    redirect(`/products/${id}/delete?error=in-use&sales=${saleRecords}&rentals=${rentalRecords}`);
   }
 
   await prisma.product.delete({ where: { id } });

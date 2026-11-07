@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { logout } from "@/app/actions/auth";
 
 function icon(children: ReactNode, viewBox = "0 0 24 24") {
   return (
@@ -148,7 +149,13 @@ export function Sidebar({ username, isStaff }: { username: string; isStaff: bool
   );
 }
 
-export function Topbar({ username }: { username: string }) {
+export function Topbar({
+  username,
+  canLogout,
+}: {
+  username: string;
+  canLogout?: boolean;
+}) {
   return (
     <header className="sb-topbar">
       <div className="sb-topbar-left">
@@ -169,6 +176,13 @@ export function Topbar({ username }: { username: string }) {
           Store: <strong className="text-dark">{username}&apos;s Shop</strong>
         </span>
       </div>
+      {canLogout && (
+        <form action={logout} className="m-0">
+          <button type="submit" className="sb-btn sb-btn-secondary sb-btn-sm py-1 px-2">
+            Log out
+          </button>
+        </form>
+      )}
     </header>
   );
 }

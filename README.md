@@ -56,6 +56,15 @@ If your network blocks port 5432/6543, run the SQL files in the Supabase SQL Edi
 3. Add environment variables `DATABASE_URL`, `DIRECT_URL`, `TZ` for Production and Preview.
 4. Deploy.
 
+## Login gate (optional)
+
+The app has no accounts: every visitor shares one workspace. To stop strangers
+from opening the ledger, set `APP_PASSWORD` in Vercel (and locally in `.env`).
+Once set, the middleware sends every request to `/login` until the correct
+password is entered, and a signed cookie keeps that device signed in for 30 days.
+Leave `APP_PASSWORD` unset to keep the current open behaviour. `AUTH_SECRET` is
+optional; set a long random string so existing sessions survive a password change.
+
 ## Project structure
 
 ```

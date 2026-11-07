@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { rm, toNumber } from "@/lib/format";
@@ -24,7 +23,6 @@ function formatTime(date: Date) {
 
 export default async function DashboardPage() {
   const user = await getSessionUser();
-  if (!user) redirect("/dashboard");
   const userId = user.id;
 
   const now = new Date();
@@ -39,10 +37,18 @@ export default async function DashboardPage() {
     weekCount,
     allAgg,
     allCount,
+    todayRentalAgg,
+    todayRentalCount,
+    weekRentalAgg,
+    weekRentalCount,
+    allRentalAgg,
+    allRentalCount,
+    activeRentals,
     products,
     recentSales,
     topGroups,
     weekSales,
+    weekRentals,
   ] = await Promise.all([
     prisma.sale.aggregate({ _sum: { totalPrice: true }, where: { userId, createdAt: { gte: todayStart } } }),
     prisma.sale.count({ where: { userId, createdAt: { gte: todayStart } } }),
@@ -50,6 +56,13 @@ export default async function DashboardPage() {
     prisma.sale.count({ where: { userId, createdAt: { gte: sevenStart } } }),
     prisma.sale.aggregate({ _sum: { totalPrice: true }, where: { userId } }),
     prisma.sale.count({ where: { userId } }),
+    prisma.rental.aggregate({ _sum: { price: true }, where: { userId, createdAt: { gte: todayStart } } }),
+    prisma.rental.count({ where: { userId, createdAt: { gte: todayStart } } }),
+    prisma.rental.aggregate({ _sum: { price: true }, where: { userId, createdAt: { gte: sevenStart } } }),
+    prisma.rental.count({ where: { userId, createdAt: { gte: sevenStart } } }),
+    prisma.rental.aggregate({ _sum: { price: true }, where: { userId } }),
+    prisma.rental.count({ where: { userId } }),
+    prisma.rental.count({ where: { userId, status: "active", endAt: { gt: now } } }),
     prisma.product.findMany({ where: { userId }, select: { quantity: true } }),
     prisma.sale.findMany({
       where: { userId },
@@ -68,15 +81,28 @@ export default async function DashboardPage() {
       where: { userId, createdAt: { gte: sevenStart } },
       select: { createdAt: true, totalPrice: true },
     }),
+    prisma.rental.findMany({
+      where: { userId, createdAt: { gte: sevenStart } },
+      select: { createdAt: true, price: true },
+    }),
   ]);
 
-  const totalToday = toNumber(todayAgg._sum.totalPrice);
-  const totalWeek = toNumber(weekAgg._sum.totalPrice);
-  const totalAllTime = toNumber(allAgg._sum.totalPrice);
-  const avgSaleValue = weekCount > 0 ? Math.floor(totalWeek / weekCount) : 0;
+  const salesToday = toNumber(todayAgg._sum.totalPrice);
+  const salesWeek = toNumber(weekAgg._sum.totalPrice);
+  const salesAllTime = toNumber(allAgg._sum.totalPrice);
+  const rentToday = toNumber(todayRentalAgg._sum.price);
+  const rentWeek = toNumber(weekRentalAgg._sum.price);
+  const rentAllTime = toNumber(allRentalAgg._sum.price);
+
+  const incomeToday = salesToday + rentToday;
+  const incomeWeek = salesWeek + rentWeek;
+  const incomeAllTime = salesAllTime + rentAllTime;
+
+  const weekTransactions = weekCount + weekRentalCount;
+  const avgSaleValue = weekTransactions > 0 ? Math.round((incomeWeek / weekTransactions) * 100) / 100 : 0;
 
   const totalProducts = products.length;
-  const outOfStock = products.filter((p) => p.quantity === 0).length;
+  const outOfStock = products.filter((p) => p.quantity <= 0).length;
   const lowStock = products.filter((p) => p.quantity > 0 && p.quantity < 10).length;
   const inStock = totalProducts - lowStock - outOfStock;
 
@@ -87,6 +113,7 @@ export default async function DashboardPage() {
   });
   const nameById = new Map(topNames.map((item) => [item.id, item.name]));
   const topProducts = topGroups.map((group) => ({
+    id: group.productId,
     name: nameById.get(group.productId) ?? "Unknown",
     totalSold: group._sum.quantitySold ?? 0,
     revenue: toNumber(group._sum.totalPrice),
@@ -98,13 +125,18 @@ export default async function DashboardPage() {
     dayStart.setDate(dayStart.getDate() - (6 - i));
     const dayEnd = new Date(dayStart);
     dayEnd.setDate(dayEnd.getDate() + 1);
-    const total = weekSales
+
+    const saleTotal = weekSales
       .filter((sale) => sale.createdAt >= dayStart && sale.createdAt < dayEnd)
       .reduce((sum, sale) => sum + toNumber(sale.totalPrice), 0);
+    const rentalTotal = weekRentals
+      .filter((rental) => rental.createdAt >= dayStart && rental.createdAt < dayEnd)
+      .reduce((sum, rental) => sum + toNumber(rental.price), 0);
+
     dailySales.push({
       day: dayStart.toLocaleDateString("en-US", { weekday: "short" }),
       date: dayStart.toLocaleDateString("en-US", { month: "short", day: "2-digit" }),
-      total,
+      total: saleTotal + rentalTotal,
     });
   }
 
@@ -114,7 +146,7 @@ export default async function DashboardPage() {
         <div>
           <h1 className="h3 mb-1">Store Overview</h1>
           <p className="text-muted small mb-0">
-            Real-time sales performance and active stock status for today.
+            Sales and rental income, plus stock health for today.
           </p>
         </div>
         <div className="d-flex align-items-center gap-2">
@@ -142,13 +174,14 @@ export default async function DashboardPage() {
           <div className="sb-stat-card">
             <div>
               <span className="sb-stat-label">
-                Today&apos;s Revenue
+                Today&apos;s Income
                 <span className="sb-status-dot green" />
               </span>
-              <div className="sb-stat-value text-dark tabular">{rm(totalToday)}</div>
+              <div className="sb-stat-value text-dark tabular">{rm(incomeToday)}</div>
             </div>
             <div className="sb-stat-meta positive">
-              {todayCount} sale{todayCount === 1 ? "" : "s"} recorded today
+              {todayCount} sale{todayCount === 1 ? "" : "s"} · {todayRentalCount} rental
+              {todayRentalCount === 1 ? "" : "s"} today
             </div>
           </div>
         </div>
@@ -157,10 +190,10 @@ export default async function DashboardPage() {
           <div className="sb-stat-card">
             <div>
               <span className="sb-stat-label">Last 7 Days</span>
-              <div className="sb-stat-value tabular">{rm(totalWeek)}</div>
+              <div className="sb-stat-value tabular">{rm(incomeWeek)}</div>
             </div>
             <div className="sb-stat-meta">
-              {weekCount} transaction{weekCount === 1 ? "" : "s"} this week
+              {rm(salesWeek)} sales · {rm(rentWeek)} rentals
             </div>
           </div>
         </div>
@@ -204,9 +237,9 @@ export default async function DashboardPage() {
           <div className="sb-card h-100">
             <div className="sb-card-header">
               <div>
-                <h2 className="sb-card-title">7-Day Sales Volume</h2>
+                <h2 className="sb-card-title">7-Day Income</h2>
                 <span className="text-muted small">
-                  Daily revenue generated across the past week
+                  Daily income from sales and rentals over the past week
                 </span>
               </div>
               <span className="badge bg-light text-dark border">RM Currency</span>
@@ -244,18 +277,30 @@ export default async function DashboardPage() {
                   <span className="sb-badge sb-badge-out-of-stock tabular">{outOfStock} items</span>
                 </div>
 
+                <div className="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
+                  <span className="text-muted small">Rentals running now</span>
+                  <Link href="/rentals" className="sb-badge sb-badge-neutral tabular text-decoration-none">
+                    {activeRentals} slots
+                  </Link>
+                </div>
+
                 <div className="d-flex justify-content-between align-items-center mb-3">
-                  <span className="text-muted small">Average Sale Value</span>
-                  <strong className="tabular text-dark">{rm(avgSaleValue)}</strong>
+                  <span className="text-muted small">Average transaction (7 days)</span>
+                  <strong className="tabular text-dark">{rm(avgSaleValue, { decimals: 2 })}</strong>
                 </div>
               </div>
 
               <div className="p-3 bg-light border rounded">
                 <div className="d-flex align-items-center justify-content-between mb-1">
-                  <span className="small fw-semibold text-dark">All-Time Recorded Sales</span>
-                  <span className="badge bg-dark text-white tabular">{allCount} sales</span>
+                  <span className="small fw-semibold text-dark">All-Time Income</span>
+                  <span className="badge bg-dark text-white tabular">
+                    {allCount + allRentalCount} records
+                  </span>
                 </div>
-                <div className="fs-5 fw-bold text-dark tabular">{rm(totalAllTime)}</div>
+                <div className="fs-5 fw-bold text-dark tabular">{rm(incomeAllTime)}</div>
+                <div className="small text-muted">
+                  {rm(salesAllTime)} sales · {rm(rentAllTime)} rentals
+                </div>
               </div>
             </div>
           </div>
@@ -282,7 +327,7 @@ export default async function DashboardPage() {
                     </thead>
                     <tbody>
                       {topProducts.map((product) => (
-                        <tr key={product.name}>
+                        <tr key={product.id}>
                           <td data-label="Product" className="fw-semibold text-dark">{product.name}</td>
                           <td data-label="Units Sold" className="col-center tabular">{product.totalSold}</td>
                           <td data-label="Total Revenue" className="col-right tabular fw-bold text-dark">

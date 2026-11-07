@@ -13,7 +13,6 @@ export default async function ToggleUserStatusPage({
   params: Promise<{ id: string }>;
 }) {
   const admin = await getSessionUser();
-  if (!admin) redirect("/dashboard");
   if (!(admin.isStaff || admin.isSuperuser)) redirect("/dashboard");
 
   const { id } = await params;

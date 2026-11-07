@@ -13,7 +13,6 @@ function formatDate(date: Date) {
 
 export default async function AdminDashboardPage() {
   const user = await getSessionUser();
-  if (!user) redirect("/dashboard");
   if (!(user.isStaff || user.isSuperuser)) redirect("/dashboard");
 
   const owners = await prisma.user.findMany({

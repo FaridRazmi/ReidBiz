@@ -20,9 +20,25 @@ function formatDateTime(date: Date) {
   return `${month} ${day}, ${hours}:${minutes}`;
 }
 
-export default async function RentalsPage() {
+const RENTAL_ERRORS: Record<string, string> = {
+  active: "That rental is still running. End it first, then you can delete the record.",
+  missing: "That rental record no longer exists.",
+};
+
+export default async function RentalsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
   const user = await getSessionUser();
   const now = new Date();
+  const { error } = await searchParams;
+  const errorMessage = error ? RENTAL_ERRORS[error] : undefined;
+
+  await prisma.rental.updateMany({
+    where: { userId: user.id, status: "active", endAt: { lte: now } },
+    data: { status: "completed" },
+  });
 
   const rentals = await prisma.rental.findMany({
     where: { userId: user.id },
@@ -37,7 +53,9 @@ export default async function RentalsPage() {
   const past = rentals.filter((rental) => !isActive(rental));
 
   const activeRevenue = active.reduce((sum, rental) => sum + toNumber(rental.price), 0);
-  const totalRevenue = rentals.reduce((sum, rental) => sum + toNumber(rental.price), 0);
+  const totalRevenue = rentals
+    .filter((rental) => rental.status !== "cancelled")
+    .reduce((sum, rental) => sum + toNumber(rental.price), 0);
 
   return (
     <>
@@ -57,6 +75,12 @@ export default async function RentalsPage() {
           <span>Rent New Item</span>
         </Link>
       </div>
+
+      {errorMessage && (
+        <div className="sb-alert sb-alert-danger mb-3">
+          <span>{errorMessage}</span>
+        </div>
+      )}
 
       <div className="row g-3 mb-4">
         <div className="col-sm-4">
@@ -126,7 +150,9 @@ export default async function RentalsPage() {
                       </td>
                       <td data-label="End" className="text-muted small tabular">{formatDateTime(rental.endAt)}</td>
                       <td data-label="Remaining" className="col-center tabular fw-semibold text-dark">
-                        {formatRemaining(rental.endAt, now)}
+                        {rental.startAt > now
+                          ? `Starts in ${formatRemaining(rental.startAt, now)}`
+                          : formatRemaining(rental.endAt, now)}
                       </td>
                       <td data-label="Price" className="col-right tabular fw-bold text-success">
                         {rm(rental.price)}

@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { rm, toNumber } from "@/lib/format";
+import PrintButton from "@/components/PrintButton";
 
 export const metadata = { title: "Sales Ledger & History | ReidBiz" };
 export const dynamic = "force-dynamic";
@@ -33,7 +33,6 @@ function formatDateTime(date: Date) {
 
 export default async function SalesHistoryPage() {
   const user = await getSessionUser();
-  if (!user) redirect("/dashboard");
 
   const sales = await prisma.sale.findMany({
     where: { userId: user.id },
@@ -55,14 +54,9 @@ export default async function SalesHistoryPage() {
           </p>
         </div>
         <div className="d-flex align-items-center gap-2">
-          <button type="button" className="sb-btn sb-btn-secondary d-none d-sm-inline-flex">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="6 9 6 2 18 2 18 9" />
-              <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-              <rect x="6" y="14" width="12" height="8" />
-            </svg>
-            <span>Print Ledger</span>
-          </button>
+          <div className="d-none d-sm-block no-print">
+            <PrintButton />
+          </div>
           <Link href="/products" className="sb-btn sb-btn-primary">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="9" cy="21" r="1" />

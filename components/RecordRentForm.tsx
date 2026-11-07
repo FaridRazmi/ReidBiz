@@ -69,7 +69,8 @@ export default function RecordRentForm({
                 <label
                   className="sb-card p-3 d-block mb-0"
                   style={{
-                    cursor: "pointer",
+                    cursor: product.prices[type] > 0 ? "pointer" : "not-allowed",
+                    opacity: product.prices[type] > 0 ? 1 : 0.55,
                     borderColor:
                       duration === type ? "var(--sb-border-focus)" : "var(--sb-border)",
                   }}
@@ -80,13 +81,16 @@ export default function RecordRentForm({
                       name="duration_type"
                       value={type}
                       checked={duration === type}
+                      disabled={product.prices[type] <= 0}
                       onChange={() => changeDuration(type)}
                       className="form-check-input mt-0"
                     />
                     <div>
                       <div className="fw-semibold text-dark">{DURATION_LABELS[type]}</div>
                       <div className="small text-muted tabular">
-                        RM {product.prices[type].toFixed(2)}
+                        {product.prices[type] > 0
+                          ? `RM ${product.prices[type].toFixed(2)}`
+                          : "Not priced"}
                       </div>
                     </div>
                   </div>
@@ -197,10 +201,14 @@ export default function RecordRentForm({
 
         <button
           type="submit"
-          disabled={pending}
+          disabled={pending || tierPrice <= 0}
           className="sb-btn sb-btn-primary w-100 sb-btn-lg"
         >
-          {pending ? "Processing..." : "Start Rental"}
+          {tierPrice <= 0
+            ? "Set a price for this duration first"
+            : pending
+              ? "Processing..."
+              : "Start Rental"}
         </button>
       </form>
     </>

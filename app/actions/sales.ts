@@ -12,7 +12,6 @@ export async function recordSale(
   formData: FormData,
 ): Promise<SaleState> {
   const user = await getSessionUser();
-  if (!user) redirect("/dashboard");
 
   const id = Number(formData.get("id"));
   const product = await prisma.product.findFirst({ where: { id, userId: user.id } });
@@ -26,23 +25,36 @@ export async function recordSale(
     };
   }
 
-  await prisma.$transaction([
-    prisma.sale.create({
+  const unitPrice = Math.round(Number(product.sellingPrice) * 100) / 100;
+  const totalPrice = Math.round(unitPrice * quantitySold * 100) / 100;
+
+  const recorded = await prisma.$transaction(async (tx) => {
+    const stock = await tx.product.updateMany({
+      where: { id: product.id, userId: user.id, quantity: { gte: quantitySold } },
+      data: { quantity: { decrement: quantitySold } },
+    });
+    if (stock.count === 0) return false;
+
+    await tx.sale.create({
       data: {
         userId: user.id,
         productId: product.id,
         quantitySold,
-        totalPrice: Number(product.sellingPrice) * quantitySold,
+        totalPrice,
       },
-    }),
-    prisma.product.update({
-      where: { id: product.id },
-      data: { quantity: product.quantity - quantitySold },
-    }),
-  ]);
+    });
+    return true;
+  });
+
+  if (!recorded) {
+    return {
+      error: "Stock changed while this sale was being recorded. Reload and check the current quantity.",
+    };
+  }
 
   revalidatePath("/dashboard");
   revalidatePath("/products");
   revalidatePath("/sales/history");
-  redirect("/dashboard");
+  revalidatePath("/reports/monthly");
+  redirect("/sales/history");
 }

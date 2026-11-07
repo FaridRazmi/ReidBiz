@@ -21,11 +21,16 @@ export default async function RentProductPage({
   });
   if (!product || !product.isRentable) notFound();
 
-  const slots = Math.max(product.quantity, 1);
+  const slots = Math.max(product.quantity, 0);
   const activeCount = await prisma.rental.count({
-    where: { productId: product.id, status: "active", endAt: { gt: new Date() } },
+    where: {
+      productId: product.id,
+      status: "active",
+      startAt: { lte: new Date() },
+      endAt: { gt: new Date() },
+    },
   });
-  const available = activeCount < slots;
+  const available = slots > 0 && activeCount < slots;
 
   return (
     <div className="py-2" style={{ maxWidth: 640, margin: "0 auto" }}>
@@ -61,26 +66,29 @@ export default async function RentProductPage({
           {!available && (
             <div className="sb-alert sb-alert-warning mb-4">
               <span>
-                This item is currently rented ({activeCount}/{slots} slots). End the current
-                rental before starting a new one.
+                {slots === 0
+                  ? "This item has 0 slots. Set Units in Stock to the number of accounts you can rent out."
+                  : `All ${slots} slot(s) are taken right now (${activeCount}/${slots}). End a rental before starting a new one.`}
               </span>
-              <Link href="/rentals" className="sb-btn sb-btn-secondary sb-btn-sm">
-                View Rentals
+              <Link href={slots === 0 ? `/products/${product.id}/edit` : "/rentals"} className="sb-btn sb-btn-secondary sb-btn-sm">
+                {slots === 0 ? "Update stock" : "View Rentals"}
               </Link>
             </div>
           )}
 
-          <RecordRentForm
-            product={{
-              id: product.id,
-              name: product.name,
-              prices: rentalPrices(product),
-              available,
-              slots,
-              activeCount,
-            }}
-            defaultStartAt={toLocalInputValue(new Date())}
-          />
+          {available && (
+            <RecordRentForm
+              product={{
+                id: product.id,
+                name: product.name,
+                prices: rentalPrices(product),
+                available,
+                slots,
+                activeCount,
+              }}
+              defaultStartAt={toLocalInputValue(new Date())}
+            />
+          )}
         </div>
       </div>
     </div>

@@ -12,6 +12,7 @@ function revalidateAll() {
   revalidatePath("/rentals");
   revalidatePath("/products");
   revalidatePath("/dashboard");
+  revalidatePath("/reports/monthly");
 }
 
 export async function createRental(
@@ -40,30 +41,53 @@ export async function createRental(
   const startAt = Number.isNaN(parsedStart.getTime()) ? new Date() : parsedStart;
   const endAt = rentalEndAt(startAt, durationType);
 
-  if (accountExpiryStatus(product.accountExpiryDate, startAt) === "expired") {
-    return { error: "This account has expired. Renew its expiry date before renting." };
+  if (endAt.getTime() <= Date.now()) {
+    return {
+      error: "That rental would already be over. Check the start date and the duration.",
+    };
+  }
+
+  const expiryAtEnd = accountExpiryStatus(product.accountExpiryDate, endAt);
+  if (expiryAtEnd === "expired") {
+    return {
+      error:
+        "The account expires before this rental ends. Pick a shorter duration or update the expiry date.",
+    };
+  }
+
+  const slots = product.quantity;
+  if (slots <= 0) {
+    return {
+      error: "This item has 0 slots. Set Units in Stock to the number of accounts you can rent out.",
+    };
   }
 
   const conflicts = await prisma.rental.count({
     where: {
       productId: product.id,
-      status: { not: "cancelled" },
+      status: { in: ["active", "completed"] },
       startAt: { lt: endAt },
       endAt: { gt: startAt },
     },
   });
 
-  const slots = Math.max(product.quantity, 1);
   if (conflicts >= slots) {
     return {
-      error: "This period overlaps another rental for this item. Pick a different time.",
+      error: "All slots are taken for this period. Pick a different time.",
     };
   }
 
   const tierPrice = priceForProduct(product, durationType);
+  if (tierPrice <= 0) {
+    return {
+      error: "This duration has no price set. Update the item pricing before renting it out.",
+    };
+  }
+
   const priceRaw = String(formData.get("price") ?? "").trim();
   const parsedPrice = priceRaw ? Number(priceRaw) : tierPrice;
-  const price = Number.isFinite(parsedPrice) && parsedPrice >= 0 ? parsedPrice : tierPrice;
+  const price =
+    Number.isFinite(parsedPrice) && parsedPrice >= 0 ? Math.round(parsedPrice * 100) / 100 : tierPrice;
   const promoNote = String(formData.get("promo_note") ?? "").trim();
   const isPromo = price < tierPrice;
 
@@ -80,7 +104,7 @@ export async function createRental(
       originalPrice: tierPrice,
       isPromo,
       promoNote,
-      status: endAt.getTime() > Date.now() ? "active" : "completed",
+      status: "active",
     },
   });
 
@@ -93,11 +117,23 @@ export async function endRental(formData: FormData) {
 
   const id = Number(formData.get("id"));
   const rental = await prisma.rental.findFirst({ where: { id, userId: user.id } });
-  if (!rental) redirect("/rentals");
+  if (!rental) redirect("/rentals?error=missing");
 
+  if (rental.status !== "active" || rental.endAt.getTime() <= Date.now()) {
+    if (rental.status === "active") {
+      await prisma.rental.update({ where: { id }, data: { status: "completed" } });
+      revalidateAll();
+    }
+    redirect("/rentals");
+  }
+
+  const endedAt = new Date();
   await prisma.rental.update({
     where: { id },
-    data: { status: "completed", endAt: new Date() },
+    data: {
+      status: "completed",
+      endAt: endedAt < rental.endAt ? endedAt : rental.endAt,
+    },
   });
 
   revalidateAll();
@@ -109,7 +145,11 @@ export async function deleteRental(formData: FormData) {
 
   const id = Number(formData.get("id"));
   const rental = await prisma.rental.findFirst({ where: { id, userId: user.id } });
-  if (!rental) redirect("/rentals");
+  if (!rental) redirect("/rentals?error=missing");
+
+  if (rental.status === "active" && rental.endAt.getTime() > Date.now()) {
+    redirect("/rentals?error=active");
+  }
 
   await prisma.rental.delete({ where: { id } });
 

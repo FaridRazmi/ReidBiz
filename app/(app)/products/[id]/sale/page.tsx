@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import RecordSaleForm from "@/components/RecordSaleForm";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
@@ -14,7 +14,6 @@ export async function generateMetadata({
 }) {
   const user = await getSessionUser();
   const { id } = await params;
-  if (!user) return { title: "Record Sale | ReidBiz" };
 
   const product = await prisma.product.findFirst({
     where: { id: Number(id), userId: user.id },
@@ -30,7 +29,6 @@ export default async function RecordSalePage({
   params: Promise<{ id: string }>;
 }) {
   const user = await getSessionUser();
-  if (!user) redirect("/dashboard");
 
   const { id } = await params;
   const product = await prisma.product.findFirst({
@@ -59,10 +57,17 @@ export default async function RecordSalePage({
             <h1 className="h5 mb-0">Record Customer Sale</h1>
             <span className="text-muted small">Instant transaction logging</span>
           </div>
-          <span className="sb-badge sb-badge-in-stock">
-            <span className="sb-status-dot green"></span>
-            In Stock: {product.quantity}
-          </span>
+          {product.quantity > 0 ? (
+            <span className="sb-badge sb-badge-in-stock">
+              <span className="sb-status-dot green"></span>
+              In Stock: {product.quantity}
+            </span>
+          ) : (
+            <span className="sb-badge sb-badge-out-of-stock">
+              <span className="sb-status-dot red"></span>
+              Out of stock
+            </span>
+          )}
         </div>
 
         <div className="sb-card-body p-4">

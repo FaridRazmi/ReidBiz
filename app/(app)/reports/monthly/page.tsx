@@ -39,7 +39,7 @@ export default async function MonthlyReportPage({
 
   const [rentals, sales] = await Promise.all([
     prisma.rental.findMany({
-      where: { userId: user.id, startAt: { gte: start, lt: end } },
+      where: { userId: user.id, createdAt: { gte: start, lt: end } },
       include: { product: { select: { name: true } } },
       orderBy: { startAt: "asc" },
     }),

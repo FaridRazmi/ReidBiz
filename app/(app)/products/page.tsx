@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { rm, toNumber } from "@/lib/format";
@@ -8,15 +7,20 @@ import { accountExpiryStatus, daysUntil } from "@/lib/rental";
 export const metadata = { title: "Inventory & Products | ReidBiz" };
 export const dynamic = "force-dynamic";
 
+const PRODUCT_ERRORS: Record<string, string> = {
+  missing: "That product no longer exists.",
+  name: "Product name cannot be empty.",
+};
+
 export default async function ProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; error?: string }>;
 }) {
   const user = await getSessionUser();
-  if (!user) redirect("/dashboard");
 
-  const { q = "", status = "all" } = await searchParams;
+  const { q = "", status = "all", error } = await searchParams;
+  const errorMessage = error ? PRODUCT_ERRORS[error] : undefined;
   const query = q.trim();
   const now = new Date();
 
@@ -36,7 +40,7 @@ export default async function ProductsPage({
 
   const totalInventoryItems = allProducts.length;
   const lowStockCount = allProducts.filter((p) => p.quantity > 0 && p.quantity < 10).length;
-  const outOfStockCount = allProducts.filter((p) => p.quantity === 0).length;
+  const outOfStockCount = allProducts.filter((p) => p.quantity <= 0).length;
   const totalInventoryValue = allProducts.reduce(
     (sum, p) => sum + p.quantity * toNumber(p.buyingPrice),
     0,
@@ -45,7 +49,7 @@ export default async function ProductsPage({
   const products = allProducts.filter((product) => {
     if (query && !product.name.toLowerCase().includes(query.toLowerCase())) return false;
     if (status === "low") return product.quantity > 0 && product.quantity < 10;
-    if (status === "out") return product.quantity === 0;
+    if (status === "out") return product.quantity <= 0;
     if (status === "in_stock") return product.quantity >= 10;
     return true;
   });
@@ -70,6 +74,12 @@ export default async function ProductsPage({
           </Link>
         </div>
       </div>
+
+      {errorMessage && (
+        <div className="sb-alert sb-alert-danger mb-3">
+          <span>{errorMessage}</span>
+        </div>
+      )}
 
       <div className="row g-3 mb-4">
         <div className="col-6 col-md-3">
@@ -177,8 +187,8 @@ export default async function ProductsPage({
                 <tbody>
                   {products.map((product) => {
                     const activeCount = activeByProduct.get(product.id) ?? 0;
-                    const slots = Math.max(product.quantity, 1);
-                    const available = activeCount < slots;
+                    const slots = Math.max(product.quantity, 0);
+                    const available = slots > 0 && activeCount < slots;
                     const expiry = accountExpiryStatus(product.accountExpiryDate, now);
                     return (
                     <tr key={product.id}>
@@ -212,7 +222,11 @@ export default async function ProductsPage({
                       </td>
                       <td data-label="Stock Status">
                         {product.isRentable ? (
-                          available ? (
+                          slots === 0 ? (
+                            <span className="sb-badge sb-badge-out-of-stock">
+                              <span className="sb-status-dot red" /> No slots
+                            </span>
+                          ) : available ? (
                             <span className="sb-badge sb-badge-in-stock">
                               <span className="sb-status-dot green" /> Available
                             </span>
@@ -251,6 +265,14 @@ export default async function ProductsPage({
                               >
                                 <span>Expired</span>
                               </button>
+                            ) : slots === 0 ? (
+                              <Link
+                                href={`/products/${product.id}/edit`}
+                                className="sb-btn sb-btn-secondary sb-btn-sm py-1 px-2"
+                                title="Set the number of rental slots"
+                              >
+                                <span>Set slots</span>
+                              </Link>
                             ) : available ? (
                               <Link
                                 href={`/products/${product.id}/rent`}

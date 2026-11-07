@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { getSessionUser } from "@/lib/auth";
+import { authEnabled } from "@/lib/session";
 import { getNotifications } from "@/lib/notifications";
 import { MobileNav, Sidebar, Topbar } from "@/components/nav";
 
@@ -15,7 +16,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       <div className="sb-shell">
         <Sidebar username={user.username} isStaff={isStaff} />
         <main className="sb-main">
-          <Topbar username={user.username} />
+          <Topbar username={user.username} canLogout={authEnabled()} />
           <div className="sb-content">
             {notifications.length > 0 && (
               <div className="mb-4">

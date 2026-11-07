@@ -1,4 +1,4 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import ProductForm from "@/components/ProductForm";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
@@ -14,7 +14,6 @@ export default async function EditProductPage({
   params: Promise<{ id: string }>;
 }) {
   const user = await getSessionUser();
-  if (!user) redirect("/dashboard");
 
   const { id } = await params;
   const product = await prisma.product.findFirst({

@@ -1,4 +1,12 @@
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
+import {
+  SESSION_COOKIE,
+  SESSION_TTL_SECONDS,
+  authEnabled,
+  createSessionToken,
+  verifySessionToken,
+} from "@/lib/session";
 
 const DEFAULT_USERNAME = "owner";
 const DEFAULT_PASSWORD_HASH =
@@ -10,6 +18,28 @@ export type SessionUser = {
   isStaff: boolean;
   isSuperuser: boolean;
 };
+
+export async function isAuthenticated(): Promise<boolean> {
+  if (!authEnabled()) return true;
+  const store = await cookies();
+  return verifySessionToken(store.get(SESSION_COOKIE)?.value);
+}
+
+export async function startSession(): Promise<void> {
+  const store = await cookies();
+  store.set(SESSION_COOKIE, await createSessionToken(), {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: SESSION_TTL_SECONDS,
+  });
+}
+
+export async function endSession(): Promise<void> {
+  const store = await cookies();
+  store.delete(SESSION_COOKIE);
+}
 
 export async function getSessionUser(): Promise<SessionUser> {
   let user = await prisma.user.findUnique({
