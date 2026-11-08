@@ -103,26 +103,26 @@ export default function ProductForm({
               </div>
             </div>
 
-            <div className="sb-form-group">
-              <label htmlFor="quantity" className="sb-label">
-                Units in Stock
-              </label>
-              <input
-                type="number"
-                name="quantity"
-                id="quantity"
-                className="sb-input tabular"
-                required
-                min="0"
-                placeholder="0"
-                defaultValue={product?.quantity ?? 0}
-              />
-              <div className="sb-input-hint">
-                {rentable
-                  ? "Number of slots/accounts that can be rented at once."
-                  : "Current physical count available on store shelves."}
+            {!rentable && (
+              <div className="sb-form-group">
+                <label htmlFor="quantity" className="sb-label">
+                  Units in Stock
+                </label>
+                <input
+                  type="number"
+                  name="quantity"
+                  id="quantity"
+                  className="sb-input tabular"
+                  required
+                  min="0"
+                  placeholder="0"
+                  defaultValue={product?.quantity ?? 0}
+                />
+                <div className="sb-input-hint">
+                  Current physical count available on store shelves.
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="p-3 bg-light border rounded mb-4">
               <div className="form-check mb-1">

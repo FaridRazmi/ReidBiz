@@ -57,9 +57,12 @@ function rentalFields(formData: FormData) {
 }
 
 function productFields(formData: FormData) {
+  const isRentable = formData.get("is_rentable") === "on";
   return {
     name: String(formData.get("name") ?? "").trim(),
-    quantity: parseQuantity(formData, "quantity"),
+    // Rentable items are one account per product, so stock is always 1 slot
+    // and the "Units in Stock" field does not apply.
+    quantity: isRentable ? 1 : parseQuantity(formData, "quantity"),
     buyingPrice: parseMoney(formData, "buying_price"),
     sellingPrice: parseMoney(formData, "selling_price"),
     ...rentalFields(formData),

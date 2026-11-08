@@ -81,23 +81,26 @@ export default async function ProfitReportPage({
     return toNumber(sale.product?.buyingPrice) * sale.quantitySold;
   }
 
-  // Modal untuk rental: kos beli sekali sahaja setiap akaun, jadi tiada COGS
-  // per transaksi. Untung rental = harga penuh.
-  function rentalCost(_rental: (typeof allRentals)[number]) {
-    void _rental;
-    return 0;
+  // Modal untuk rental = harga beli (wholesale cost) akaun yang disewa.
+  // Setiap akaun ialah satu produk, jadi kos penuh dikenakan sekali sewa.
+  function rentalCost(rental: (typeof allRentals)[number]) {
+    return toNumber(rental.product?.buyingPrice);
   }
 
   const monthSalesRevenue = monthSales.reduce((sum, s) => sum + toNumber(s.totalPrice), 0);
   const monthRentalRevenue = monthRentals.reduce((sum, r) => sum + toNumber(r.price), 0);
-  const monthModal = monthSales.reduce((sum, s) => sum + saleCost(s), 0);
+  const monthModal =
+    monthSales.reduce((sum, s) => sum + saleCost(s), 0) +
+    monthRentals.reduce((sum, r) => sum + rentalCost(r), 0);
   const monthRevenue = monthSalesRevenue + monthRentalRevenue;
   const monthProfit = monthRevenue - monthModal;
   const monthMargin = monthRevenue > 0 ? (monthProfit / monthRevenue) * 100 : 0;
 
   const lifeSalesRevenue = allSales.reduce((sum, s) => sum + toNumber(s.totalPrice), 0);
   const lifeRentalRevenue = allRentals.reduce((sum, r) => sum + toNumber(r.price), 0);
-  const lifeModal = allSales.reduce((sum, s) => sum + saleCost(s), 0);
+  const lifeModal =
+    allSales.reduce((sum, s) => sum + saleCost(s), 0) +
+    allRentals.reduce((sum, r) => sum + rentalCost(r), 0);
   const lifeRevenue = lifeSalesRevenue + lifeRentalRevenue;
   const lifeProfit = lifeRevenue - lifeModal;
   const lifeMargin = lifeRevenue > 0 ? (lifeProfit / lifeRevenue) * 100 : 0;
