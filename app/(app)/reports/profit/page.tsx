@@ -81,26 +81,32 @@ export default async function ProfitReportPage({
     return toNumber(sale.product?.buyingPrice) * sale.quantitySold;
   }
 
-  // Modal untuk rental = harga beli (wholesale cost) akaun yang disewa.
-  // Setiap akaun ialah satu produk, jadi kos penuh dikenakan sekali sewa.
-  function rentalCost(rental: (typeof allRentals)[number]) {
-    return toNumber(rental.product?.buyingPrice);
-  }
+  // Modal rental ialah kos bulanan semua akaun (produk rentable) yang dimiliki
+  // pada bulan tersebut — bukan ikut bilangan sewa. Setiap akaun = satu produk.
+  const rentableAccounts = await prisma.product.findMany({
+    where: { userId: user.id, isRentable: true },
+    select: { id: true, buyingPrice: true, createdAt: true },
+  });
+  const rentalModalOwnedBy = (end: Date) =>
+    rentableAccounts
+      .filter((account) => account.createdAt < end)
+      .reduce((sum, account) => sum + toNumber(account.buyingPrice), 0);
 
   const monthSalesRevenue = monthSales.reduce((sum, s) => sum + toNumber(s.totalPrice), 0);
   const monthRentalRevenue = monthRentals.reduce((sum, r) => sum + toNumber(r.price), 0);
-  const monthModal =
-    monthSales.reduce((sum, s) => sum + saleCost(s), 0) +
-    monthRentals.reduce((sum, r) => sum + rentalCost(r), 0);
+  const salesModal =
+    monthSales.reduce((sum, s) => sum + saleCost(s), 0);
+  const monthModal = salesModal + rentalModalOwnedBy(monthEnd);
   const monthRevenue = monthSalesRevenue + monthRentalRevenue;
   const monthProfit = monthRevenue - monthModal;
   const monthMargin = monthRevenue > 0 ? (monthProfit / monthRevenue) * 100 : 0;
 
   const lifeSalesRevenue = allSales.reduce((sum, s) => sum + toNumber(s.totalPrice), 0);
   const lifeRentalRevenue = allRentals.reduce((sum, r) => sum + toNumber(r.price), 0);
-  const lifeModal =
-    allSales.reduce((sum, s) => sum + saleCost(s), 0) +
-    allRentals.reduce((sum, r) => sum + rentalCost(r), 0);
+  const lifeModal = salesModal + rentableAccounts.reduce(
+    (sum, account) => sum + toNumber(account.buyingPrice),
+    0,
+  );
   const lifeRevenue = lifeSalesRevenue + lifeRentalRevenue;
   const lifeProfit = lifeRevenue - lifeModal;
   const lifeMargin = lifeRevenue > 0 ? (lifeProfit / lifeRevenue) * 100 : 0;
@@ -137,7 +143,7 @@ export default async function ProfitReportPage({
       customer: r.customerName,
       qtyLabel: durationLabel(r.durationType),
       revenue: toNumber(r.price),
-      modal: rentalCost(r),
+      modal: 0,
       kind: "rental",
     })),
   ].sort((a, b) => b.date.getTime() - a.date.getTime());
@@ -193,6 +199,10 @@ export default async function ProfitReportPage({
               <div className="d-flex justify-content-between align-items-center mb-2">
                 <span className="text-muted small">Modal (COGS)</span>
                 <span className="tabular text-muted">−{rm(monthModal)}</span>
+              </div>
+              <div className="text-muted small mb-2">
+                Modal rental bulan ni: kos {rentableAccounts.filter((a) => a.createdAt < monthEnd).length} akaun
+                ({rm(rentalModalOwnedBy(monthEnd))}), bukan ikut bilangan sewa.
               </div>
               <div className="d-flex justify-content-between align-items-center border-top pt-2">
                 <span className="fw-semibold text-dark">Untung</span>
