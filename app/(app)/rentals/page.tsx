@@ -2,7 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { rm, toNumber } from "@/lib/format";
-import { formatShopDateTime, formatShopShortDate } from "@/lib/time";
+import { formatShopDateTime, shopShortDate } from "@/lib/time";
 import { DURATION_LABELS, formatRemaining, isDurationType } from "@/lib/rental";
 import { deleteRental, endRental } from "@/app/actions/rentals";
 
@@ -127,7 +127,7 @@ export default async function RentalsPage({
                         {rental.product.name}
                         {rental.product.accountExpiryDate && (
                           <span className="text-muted small d-block">
-                            Account expires {formatShopShortDate(rental.product.accountExpiryDate)}
+                            Account expires {shopShortDate(rental.product.accountExpiryDate)}
                           </span>
                         )}
                       </td>
@@ -216,7 +216,7 @@ export default async function RentalsPage({
                         {rental.product.name}
                         {rental.product.accountExpiryDate && (
                           <span className="text-muted small d-block">
-                            Account expires {formatShopShortDate(rental.product.accountExpiryDate)}
+                            Account expires {shopShortDate(rental.product.accountExpiryDate)}
                           </span>
                         )}
                       </td>
