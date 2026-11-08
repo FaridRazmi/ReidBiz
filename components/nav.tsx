@@ -116,6 +116,17 @@ export function Sidebar({ username, isStaff }: { username: string; isStaff: bool
           ),
           "Reports",
         )}
+        {link(
+          "/reports/profit",
+          pathname.startsWith("/reports/profit"),
+          icon(
+            <>
+              <path d="M3 17l6-6 4 4 8-8" />
+              <path d="M14 7h7v7" />
+            </>,
+          ),
+          "Profit",
+        )}
 
         {isStaff && (
           <>
@@ -243,6 +254,16 @@ export function MobileNav() {
           <line x1="6" y1="20" x2="6" y2="14" />
         </svg>
         <span>Reports</span>
+      </Link>
+      <Link
+        href="/reports/profit"
+        className={`sb-mobile-tab ${pathname.startsWith("/reports/profit") ? "active" : ""}`}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M3 17l6-6 4 4 8-8" />
+          <path d="M14 7h7v7" />
+        </svg>
+        <span>Profit</span>
       </Link>
     </nav>
   );
