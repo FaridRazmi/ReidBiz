@@ -3,10 +3,17 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { rm, toNumber } from "@/lib/format";
 import { formatShopDateTimeFull } from "@/lib/time";
+import { DURATION_LABELS, isDurationType } from "@/lib/rental";
 import PrintButton from "@/components/PrintButton";
 
 export const metadata = { title: "Profit Report | ReidBiz" };
 export const dynamic = "force-dynamic";
+
+const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+function durationLabel(type: string) {
+  return isDurationType(type) ? DURATION_LABELS[type] : type;
+}
 
 export default async function ProfitReportPage({
   searchParams,
@@ -23,10 +30,9 @@ export default async function ProfitReportPage({
   const monthStart = new Date(Date.UTC(year, monthIndex, 1));
   const monthEnd = new Date(Date.UTC(year, monthIndex + 1, 1));
   const monthValue = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
-  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   const monthLabel = `${monthNames[monthIndex]} ${year}`;
 
-  const select = {
+  const saleSelect = {
     id: true,
     quantitySold: true,
     totalPrice: true,
@@ -34,32 +40,106 @@ export default async function ProfitReportPage({
     product: { select: { name: true, buyingPrice: true } },
   } as const;
 
-  const [monthSales, allSales] = await Promise.all([
+  const rentalSelect = {
+    id: true,
+    customerName: true,
+    durationType: true,
+    price: true,
+    createdAt: true,
+    status: true,
+    product: { select: { name: true, buyingPrice: true } },
+  } as const;
+
+  const [monthSales, allSales, monthRentals, allRentals] = await Promise.all([
     prisma.sale.findMany({
       where: { userId: user.id, createdAt: { gte: monthStart, lt: monthEnd } },
-      select,
+      select: saleSelect,
       orderBy: { createdAt: "desc" },
     }),
     prisma.sale.findMany({
       where: { userId: user.id },
-      select,
+      select: saleSelect,
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.rental.findMany({
+      where: {
+        userId: user.id,
+        status: { not: "cancelled" },
+        createdAt: { gte: monthStart, lt: monthEnd },
+      },
+      select: rentalSelect,
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.rental.findMany({
+      where: { userId: user.id, status: { not: "cancelled" } },
+      select: rentalSelect,
       orderBy: { createdAt: "desc" },
     }),
   ]);
 
-  function costOf(sale: (typeof allSales)[number]) {
+  function saleCost(sale: (typeof allSales)[number]) {
     return toNumber(sale.product?.buyingPrice) * sale.quantitySold;
   }
 
-  const monthRevenue = monthSales.reduce((sum, s) => sum + toNumber(s.totalPrice), 0);
-  const monthModal = monthSales.reduce((sum, s) => sum + costOf(s), 0);
+  // Modal untuk rental: kos beli sekali sahaja setiap akaun, jadi tiada COGS
+  // per transaksi. Untung rental = harga penuh.
+  function rentalCost(_rental: (typeof allRentals)[number]) {
+    void _rental;
+    return 0;
+  }
+
+  const monthSalesRevenue = monthSales.reduce((sum, s) => sum + toNumber(s.totalPrice), 0);
+  const monthRentalRevenue = monthRentals.reduce((sum, r) => sum + toNumber(r.price), 0);
+  const monthModal = monthSales.reduce((sum, s) => sum + saleCost(s), 0);
+  const monthRevenue = monthSalesRevenue + monthRentalRevenue;
   const monthProfit = monthRevenue - monthModal;
   const monthMargin = monthRevenue > 0 ? (monthProfit / monthRevenue) * 100 : 0;
 
-  const lifeRevenue = allSales.reduce((sum, s) => sum + toNumber(s.totalPrice), 0);
-  const lifeModal = allSales.reduce((sum, s) => sum + costOf(s), 0);
+  const lifeSalesRevenue = allSales.reduce((sum, s) => sum + toNumber(s.totalPrice), 0);
+  const lifeRentalRevenue = allRentals.reduce((sum, r) => sum + toNumber(r.price), 0);
+  const lifeModal = allSales.reduce((sum, s) => sum + saleCost(s), 0);
+  const lifeRevenue = lifeSalesRevenue + lifeRentalRevenue;
   const lifeProfit = lifeRevenue - lifeModal;
   const lifeMargin = lifeRevenue > 0 ? (lifeProfit / lifeRevenue) * 100 : 0;
+
+  type Row = {
+    key: string;
+    receipt: string;
+    date: Date;
+    item: string;
+    customer: string;
+    qtyLabel: string;
+    revenue: number;
+    modal: number;
+    kind: "sale" | "rental";
+  };
+
+  const monthRows: Row[] = [
+    ...monthSales.map<Row>((s) => ({
+      key: `s-${s.id}`,
+      receipt: `#SL-${s.id}`,
+      date: s.createdAt,
+      item: s.product?.name ?? "Unknown",
+      customer: "—",
+      qtyLabel: `${s.quantitySold} unit`,
+      revenue: toNumber(s.totalPrice),
+      modal: saleCost(s),
+      kind: "sale",
+    })),
+    ...monthRentals.map<Row>((r) => ({
+      key: `r-${r.id}`,
+      receipt: `#RT-${r.id}`,
+      date: r.createdAt,
+      item: r.product?.name ?? "Unknown",
+      customer: r.customerName,
+      qtyLabel: durationLabel(r.durationType),
+      revenue: toNumber(r.price),
+      modal: rentalCost(r),
+      kind: "rental",
+    })),
+  ].sort((a, b) => b.date.getTime() - a.date.getTime());
+
+  const transactionCount = monthRows.length;
 
   return (
     <>
@@ -67,7 +147,7 @@ export default async function ProfitReportPage({
         <div>
           <h1 className="h3 mb-1">Profit Report</h1>
           <p className="text-muted small mb-0">
-            Untung = jualan − modal (kos barang dijual, ikut harga beli semasa).
+            Untung = jualan + hasil rental − modal. Modal = harga beli barang yang dijual.
           </p>
         </div>
         <div className="d-flex align-items-center gap-2">
@@ -95,13 +175,17 @@ export default async function ProfitReportPage({
             <div className="sb-card-header">
               <h2 className="sb-card-title">Monthly — {monthLabel}</h2>
               <span className="badge bg-light text-dark border tabular">
-                {monthSales.length} sales
+                {transactionCount} transaksi
               </span>
             </div>
             <div className="sb-card-body">
               <div className="d-flex justify-content-between align-items-center mb-2">
                 <span className="text-muted small">Jualan (Sales)</span>
-                <span className="tabular fw-semibold text-dark">{rm(monthRevenue)}</span>
+                <span className="tabular fw-semibold text-dark">{rm(monthSalesRevenue)}</span>
+              </div>
+              <div className="d-flex justify-content-between align-items-center mb-2">
+                <span className="text-muted small">Hasil Rental</span>
+                <span className="tabular fw-semibold text-dark">{rm(monthRentalRevenue)}</span>
               </div>
               <div className="d-flex justify-content-between align-items-center mb-2">
                 <span className="text-muted small">Modal (COGS)</span>
@@ -116,7 +200,7 @@ export default async function ProfitReportPage({
                 </span>
               </div>
               <div className="text-muted small mt-1">
-                Margin: {monthMargin.toFixed(1)}% daripada jualan
+                Margin: {monthMargin.toFixed(1)}% daripada hasil
               </div>
             </div>
           </div>
@@ -127,13 +211,17 @@ export default async function ProfitReportPage({
             <div className="sb-card-header">
               <h2 className="sb-card-title">Lifetime</h2>
               <span className="badge bg-light text-dark border tabular">
-                {allSales.length} sales
+                {allSales.length + allRentals.length} transaksi
               </span>
             </div>
             <div className="sb-card-body">
               <div className="d-flex justify-content-between align-items-center mb-2">
                 <span className="text-muted small">Jualan (Sales)</span>
-                <span className="tabular fw-semibold text-dark">{rm(lifeRevenue)}</span>
+                <span className="tabular fw-semibold text-dark">{rm(lifeSalesRevenue)}</span>
+              </div>
+              <div className="d-flex justify-content-between align-items-center mb-2">
+                <span className="text-muted small">Hasil Rental</span>
+                <span className="tabular fw-semibold text-dark">{rm(lifeRentalRevenue)}</span>
               </div>
               <div className="d-flex justify-content-between align-items-center mb-2">
                 <span className="text-muted small">Modal (COGS)</span>
@@ -148,7 +236,7 @@ export default async function ProfitReportPage({
                 </span>
               </div>
               <div className="text-muted small mt-1">
-                Margin: {lifeMargin.toFixed(1)}% daripada jualan
+                Margin: {lifeMargin.toFixed(1)}% daripada hasil
               </div>
             </div>
           </div>
@@ -157,11 +245,11 @@ export default async function ProfitReportPage({
 
       <div className="sb-card">
         <div className="sb-card-header">
-          <h2 className="sb-card-title">Sales Breakdown — {monthLabel}</h2>
-          <span className="text-muted small">Untung setiap transaksi</span>
+          <h2 className="sb-card-title">Breakdown — {monthLabel}</h2>
+          <span className="text-muted small">Jualan + rental, setiap transaksi</span>
         </div>
         <div className="sb-card-body p-0">
-          {monthSales.length > 0 ? (
+          {monthRows.length > 0 ? (
             <div className="sb-table-responsive">
               <table className="sb-table">
                 <thead>
@@ -169,36 +257,41 @@ export default async function ProfitReportPage({
                     <th>Receipt</th>
                     <th>Date &amp; Time</th>
                     <th>Item</th>
-                    <th className="col-center">Qty</th>
-                    <th className="col-right">Jualan</th>
+                    <th>Customer</th>
+                    <th className="col-center">Qty / Duration</th>
+                    <th className="col-right">Hasil</th>
                     <th className="col-right">Modal</th>
                     <th className="col-right">Untung</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {monthSales.map((sale) => {
-                    const revenue = toNumber(sale.totalPrice);
-                    const modal = costOf(sale);
-                    const untung = revenue - modal;
+                  {monthRows.map((row) => {
+                    const untung = row.revenue - row.modal;
                     return (
-                      <tr key={sale.id}>
+                      <tr key={row.key}>
                         <td data-label="Receipt" className="tabular fw-bold text-dark">
-                          #SL-{sale.id}
+                          {row.receipt}
+                          {row.kind === "rental" && (
+                            <span className="sb-badge sb-badge-neutral ms-1">Rental</span>
+                          )}
                         </td>
                         <td data-label="Date & Time" className="text-muted small tabular">
-                          {formatShopDateTimeFull(sale.createdAt)}
+                          {formatShopDateTimeFull(row.date)}
                         </td>
                         <td data-label="Item" className="fw-semibold text-dark">
-                          {sale.product?.name ?? "Unknown"}
+                          {row.item}
                         </td>
-                        <td data-label="Qty" className="col-center tabular">
-                          {sale.quantitySold}
+                        <td data-label="Customer" className="text-muted">
+                          {row.customer}
                         </td>
-                        <td data-label="Jualan" className="col-right tabular">
-                          {rm(revenue)}
+                        <td data-label="Qty / Duration" className="col-center">
+                          <span className="sb-badge sb-badge-neutral">{row.qtyLabel}</span>
+                        </td>
+                        <td data-label="Hasil" className="col-right tabular">
+                          {rm(row.revenue)}
                         </td>
                         <td data-label="Modal" className="col-right tabular text-muted">
-                          {rm(modal)}
+                          {rm(row.modal)}
                         </td>
                         <td
                           data-label="Untung"
@@ -214,7 +307,7 @@ export default async function ProfitReportPage({
             </div>
           ) : (
             <div className="p-4 text-center text-muted small">
-              Tiada jualan bulan {monthLabel}.
+              Tiada transaksi bulan {monthLabel}.
             </div>
           )}
         </div>
