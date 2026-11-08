@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { rm, toNumber } from "@/lib/format";
+import { formatShopDateTime } from "@/lib/time";
 import { DURATION_LABELS, formatRemaining, isDurationType } from "@/lib/rental";
 import { deleteRental, endRental } from "@/app/actions/rentals";
 
@@ -10,14 +11,6 @@ export const dynamic = "force-dynamic";
 
 function durationLabel(type: string) {
   return isDurationType(type) ? DURATION_LABELS[type] : type;
-}
-
-function formatDateTime(date: Date) {
-  const month = date.toLocaleDateString("en-US", { month: "short" });
-  const day = String(date.getDate()).padStart(2, "0");
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${month} ${day}, ${hours}:${minutes}`;
 }
 
 const RENTAL_ERRORS: Record<string, string> = {
@@ -146,9 +139,9 @@ export default async function RentalsPage({
                         )}
                       </td>
                       <td data-label="Start" className="text-muted small tabular">
-                        {formatDateTime(rental.startAt)}
+                        {formatShopDateTime(rental.startAt)}
                       </td>
-                      <td data-label="End" className="text-muted small tabular">{formatDateTime(rental.endAt)}</td>
+                      <td data-label="End" className="text-muted small tabular">{formatShopDateTime(rental.endAt)}</td>
                       <td data-label="Remaining" className="col-center tabular fw-semibold text-dark">
                         {rental.startAt > now
                           ? `Starts in ${formatRemaining(rental.startAt, now)}`
@@ -223,9 +216,9 @@ export default async function RentalsPage({
                         )}
                       </td>
                       <td data-label="Start" className="text-muted small tabular">
-                        {formatDateTime(rental.startAt)}
+                        {formatShopDateTime(rental.startAt)}
                       </td>
-                      <td data-label="End" className="text-muted small tabular">{formatDateTime(rental.endAt)}</td>
+                      <td data-label="End" className="text-muted small tabular">{formatShopDateTime(rental.endAt)}</td>
                       <td data-label="Price" className="col-right tabular fw-bold text-dark">
                         {rm(rental.price)}
                         {rental.isPromo && rental.originalPrice != null && (

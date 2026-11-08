@@ -2,34 +2,11 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { rm, toNumber } from "@/lib/format";
+import { formatShopDateTimeFull } from "@/lib/time";
 import PrintButton from "@/components/PrintButton";
 
 export const metadata = { title: "Sales Ledger & History | ReidBiz" };
 export const dynamic = "force-dynamic";
-
-const MONTHS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
-
-function formatDateTime(date: Date) {
-  const month = MONTHS[date.getMonth()];
-  const day = String(date.getDate()).padStart(2, "0");
-  const year = date.getFullYear();
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${month} ${day}, ${year} ${hours}:${minutes}`;
-}
 
 export default async function SalesHistoryPage() {
   const user = await getSessionUser();
@@ -123,7 +100,7 @@ export default async function SalesHistoryPage() {
                       <tr key={sale.id}>
                         <td data-label="Receipt #" className="tabular fw-bold text-dark">#SL-{sale.id}</td>
                         <td data-label="Date & Time" className="text-muted tabular small">
-                          {formatDateTime(sale.createdAt)}
+                          {formatShopDateTimeFull(sale.createdAt)}
                         </td>
                         <td data-label="Product Item">
                           <span className="fw-semibold text-dark">{sale.product.name}</span>

@@ -2,18 +2,12 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { rm, toNumber } from "@/lib/format";
+import { formatShopDateTimeFull } from "@/lib/time";
 import { DURATION_LABELS, isDurationType } from "@/lib/rental";
 import PrintButton from "@/components/PrintButton";
 
 export const metadata = { title: "Monthly Income Receipt | ReidBiz" };
 export const dynamic = "force-dynamic";
-
-function formatDateTime(date: Date) {
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()} ${pad(
-    date.getHours(),
-  )}:${pad(date.getMinutes())}`;
-}
 
 function durationLabel(type: string) {
   return isDurationType(type) ? DURATION_LABELS[type] : type;
@@ -35,7 +29,8 @@ export default async function MonthlyReportPage({
   const start = new Date(year, monthIndex, 1);
   const end = new Date(year, monthIndex + 1, 1);
   const monthValue = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
-  const monthLabel = start.toLocaleDateString("en-MY", { month: "long", year: "numeric" });
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const monthLabel = `${monthNames[monthIndex]} ${year}`;
 
   const [rentals, sales] = await Promise.all([
     prisma.rental.findMany({
@@ -82,7 +77,7 @@ export default async function MonthlyReportPage({
         <div className="text-center mb-2">
           <div className="fw-bold" style={{ fontSize: "13px" }}>{user.username}&apos;s Shop</div>
           <div>Income Receipt | {monthLabel}</div>
-          <div className="text-muted">Generated {formatDateTime(now)}</div>
+          <div className="text-muted">Generated {formatShopDateTimeFull(now)}</div>
         </div>
 
         <table className="mb-2">
@@ -122,7 +117,7 @@ export default async function MonthlyReportPage({
               <tbody>
                 {rentals.map((rental) => (
                   <tr key={rental.id}>
-                    <td>{formatDateTime(rental.startAt)}</td>
+                    <td>{formatShopDateTimeFull(rental.startAt)}</td>
                     <td>{rental.product.name}</td>
                     <td>{rental.customerName}</td>
                     <td>{durationLabel(rental.durationType)}</td>
@@ -149,7 +144,7 @@ export default async function MonthlyReportPage({
               <tbody>
                 {sales.map((sale) => (
                   <tr key={sale.id}>
-                    <td>{formatDateTime(sale.createdAt)}</td>
+                    <td>{formatShopDateTimeFull(sale.createdAt)}</td>
                     <td>{sale.product.name}</td>
                     <td className="text-end">{sale.quantitySold}</td>
                     <td className="text-end">{rm(sale.totalPrice)}</td>
@@ -194,7 +189,7 @@ export default async function MonthlyReportPage({
             <div>
               <div className="fw-bold text-dark fs-5">ReidBiz | Income Statement</div>
               <div className="text-muted small">
-                Month: {monthLabel} · Generated at {formatDateTime(now)}
+                Month: {monthLabel} · Generated at {formatShopDateTimeFull(now)}
               </div>
             </div>
             <div className="text-end">
@@ -250,7 +245,7 @@ export default async function MonthlyReportPage({
                 <tbody>
                   {rentals.map((rental) => (
                     <tr key={rental.id}>
-                      <td className="text-muted small tabular">{formatDateTime(rental.startAt)}</td>
+                      <td className="text-muted small tabular">{formatShopDateTimeFull(rental.startAt)}</td>
                       <td className="fw-semibold text-dark">{rental.product.name}</td>
                       <td className="text-muted">{rental.customerName}</td>
                       <td>
@@ -311,7 +306,7 @@ export default async function MonthlyReportPage({
                 <tbody>
                   {sales.map((sale) => (
                     <tr key={sale.id}>
-                      <td className="text-muted small tabular">{formatDateTime(sale.createdAt)}</td>
+                      <td className="text-muted small tabular">{formatShopDateTimeFull(sale.createdAt)}</td>
                       <td className="fw-semibold text-dark">{sale.product.name}</td>
                       <td className="col-center tabular">{sale.quantitySold}</td>
                       <td className="col-right tabular fw-bold text-dark">

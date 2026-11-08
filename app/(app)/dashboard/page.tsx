@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { rm, toNumber } from "@/lib/format";
+import { formatShopDateTime, shopWeekday, shopShortDate, sameShopDay, shopDateKey } from "@/lib/time";
 import SalesTrendChart, { type DailySale } from "@/components/SalesTrendChart";
 
 export const metadata = { title: "Dashboard | ReidBiz Sales Ledger" };
@@ -11,14 +12,6 @@ function startOfDay(date: Date) {
   const value = new Date(date);
   value.setHours(0, 0, 0, 0);
   return value;
-}
-
-function formatTime(date: Date) {
-  const month = date.toLocaleDateString("en-US", { month: "short" });
-  const day = String(date.getDate()).padStart(2, "0");
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${month} ${day}, ${hours}:${minutes}`;
 }
 
 export default async function DashboardPage() {
@@ -121,21 +114,19 @@ export default async function DashboardPage() {
 
   const dailySales: DailySale[] = [];
   for (let i = 0; i < 7; i += 1) {
-    const dayStart = startOfDay(now);
-    dayStart.setDate(dayStart.getDate() - (6 - i));
-    const dayEnd = new Date(dayStart);
-    dayEnd.setDate(dayEnd.getDate() + 1);
+    // Walk back 6 shop-local days from today.
+    const cursor = new Date(now.getTime() - (6 - i) * 24 * 60 * 60 * 1000);
 
     const saleTotal = weekSales
-      .filter((sale) => sale.createdAt >= dayStart && sale.createdAt < dayEnd)
+      .filter((sale) => sameShopDay(sale.createdAt, cursor))
       .reduce((sum, sale) => sum + toNumber(sale.totalPrice), 0);
     const rentalTotal = weekRentals
-      .filter((rental) => rental.createdAt >= dayStart && rental.createdAt < dayEnd)
+      .filter((rental) => sameShopDay(rental.createdAt, cursor))
       .reduce((sum, rental) => sum + toNumber(rental.price), 0);
 
     dailySales.push({
-      day: dayStart.toLocaleDateString("en-US", { weekday: "short" }),
-      date: dayStart.toLocaleDateString("en-US", { month: "short", day: "2-digit" }),
+      day: shopWeekday(cursor),
+      date: shopShortDate(cursor),
       total: saleTotal + rentalTotal,
     });
   }
@@ -378,7 +369,7 @@ export default async function DashboardPage() {
                         <tr key={sale.id}>
                           <td data-label="Item" className="fw-semibold text-dark">{sale.product.name}</td>
                           <td data-label="Time" className="text-muted small tabular">
-                            {formatTime(sale.createdAt)}
+                            {formatShopDateTime(sale.createdAt)}
                           </td>
                           <td data-label="Qty" className="col-center tabular">{sale.quantitySold}</td>
                           <td data-label="Amount" className="col-right tabular fw-bold text-success">
