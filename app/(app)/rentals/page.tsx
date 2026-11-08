@@ -2,7 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { rm, toNumber } from "@/lib/format";
-import { formatShopDateTime } from "@/lib/time";
+import { formatShopDateTime, formatShopShortDate } from "@/lib/time";
 import { DURATION_LABELS, formatRemaining, isDurationType } from "@/lib/rental";
 import { deleteRental, endRental } from "@/app/actions/rentals";
 
@@ -35,7 +35,7 @@ export default async function RentalsPage({
 
   const rentals = await prisma.rental.findMany({
     where: { userId: user.id },
-    include: { product: { select: { name: true } } },
+    include: { product: { select: { name: true, accountExpiryDate: true } } },
     orderBy: { createdAt: "desc" },
   });
 
@@ -123,7 +123,14 @@ export default async function RentalsPage({
                 <tbody>
                   {active.map((rental) => (
                     <tr key={rental.id}>
-                      <td data-label="Item" className="fw-semibold text-dark">{rental.product.name}</td>
+                      <td data-label="Item" className="fw-semibold text-dark">
+                        {rental.product.name}
+                        {rental.product.accountExpiryDate && (
+                          <span className="text-muted small d-block">
+                            Account expires {formatShopShortDate(rental.product.accountExpiryDate)}
+                          </span>
+                        )}
+                      </td>
                       <td data-label="Customer">
                         <div className="fw-semibold text-dark">{rental.customerName}</div>
                         {rental.customerPhone && (
@@ -205,7 +212,14 @@ export default async function RentalsPage({
                 <tbody>
                   {past.map((rental) => (
                     <tr key={rental.id}>
-                      <td data-label="Item" className="fw-semibold text-dark">{rental.product.name}</td>
+                      <td data-label="Item" className="fw-semibold text-dark">
+                        {rental.product.name}
+                        {rental.product.accountExpiryDate && (
+                          <span className="text-muted small d-block">
+                            Account expires {formatShopShortDate(rental.product.accountExpiryDate)}
+                          </span>
+                        )}
+                      </td>
                       <td data-label="Customer" className="text-muted">{rental.customerName}</td>
                       <td data-label="Duration">
                         <span className="sb-badge sb-badge-neutral">
