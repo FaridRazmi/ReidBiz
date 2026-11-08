@@ -168,7 +168,6 @@ export default async function ProfitReportPage({
               type="month"
               name="month"
               defaultValue={monthValue}
-              max={monthValue}
               className="sb-input tabular"
             />
             <button type="submit" className="sb-btn sb-btn-secondary sb-btn-sm">
