@@ -37,7 +37,9 @@ export async function createRental(
   const customerPhone = String(formData.get("customer_phone") ?? "").trim();
 
   const startRaw = String(formData.get("start_at") ?? "").trim();
-  const parsedStart = startRaw ? new Date(startRaw) : new Date();
+  // datetime-local sends wall-clock time with no timezone; the shop runs on
+  // MYT (UTC+8), so tag it with the offset before the server (UTC) parses it.
+  const parsedStart = startRaw ? new Date(`${startRaw}:00+08:00`) : new Date();
   const startAt = Number.isNaN(parsedStart.getTime()) ? new Date() : parsedStart;
   const endAt = rentalEndAt(startAt, durationType);
 
