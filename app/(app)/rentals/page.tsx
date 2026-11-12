@@ -100,6 +100,25 @@ export default async function RentalsPage({
       </div>
 
       <div className="sb-card mb-4">
+        <div className="sb-card-body d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2">
+          <div>
+            <div className="fw-semibold text-dark">Rotate account password</div>
+            <div className="text-muted small">
+              Lepas setiap rent habis, tukar password akaun Nebula sebelum disewa semula.
+            </div>
+          </div>
+          <a
+            href="https://www.nebula.my"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="sb-btn sb-btn-secondary sb-btn-sm no-print"
+          >
+            www.nebula.my ↗
+          </a>
+        </div>
+      </div>
+
+      <div className="sb-card mb-4">
         <div className="sb-card-header">
           <h2 className="sb-card-title">Active Rentals</h2>
           <span className="badge bg-dark text-white tabular">{active.length} active</span>
@@ -172,14 +191,7 @@ export default async function RentalsPage({
                             End
                           </button>
                         </form>
-                        <a
-                          href="https://www.nebula.my"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="d-block text-muted small mt-1"
-                        >
-                          Tukar password ↗
-                        </a>
+
                       </td>
                     </tr>
                   ))}
