@@ -172,6 +172,14 @@ export default async function RentalsPage({
                             End
                           </button>
                         </form>
+                        <a
+                          href="https://www.nebula.my"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="d-block text-muted small mt-1"
+                        >
+                          Tukar password ↗
+                        </a>
                       </td>
                     </tr>
                   ))}
